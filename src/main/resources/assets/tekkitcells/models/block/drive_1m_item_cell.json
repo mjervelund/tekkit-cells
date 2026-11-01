@@ -1,0 +1,53 @@
+{
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "tekkitcells:block/drive_cells",
+    "cell": "tekkitcells:block/drive_cells"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        6,
+        2,
+        2
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            6,
+            2
+          ],
+          "texture": "#cell",
+          "cullface": "north"
+        },
+        "up": {
+          "uv": [
+            6,
+            8,
+            0,
+            10
+          ],
+          "texture": "#cell",
+          "cullface": "north"
+        },
+        "down": {
+          "uv": [
+            6,
+            8,
+            0,
+            10
+          ],
+          "texture": "#cell",
+          "cullface": "north"
+        }
+      }
+    }
+  ]
+}

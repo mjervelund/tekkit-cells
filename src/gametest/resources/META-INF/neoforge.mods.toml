@@ -1,0 +1,16 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="MIT"
+
+[[mods]]
+modId="tekkitcellstests"
+version="1.0.0"
+displayName="Tekkit Cells GameTests"
+description='''GameTests for Tekkit Cells (dev runs only).'''
+
+[[dependencies.tekkitcellstests]]
+modId="tekkitcells"
+type="required"
+versionRange="[0,)"
+ordering="AFTER"
+side="BOTH"

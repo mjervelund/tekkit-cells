@@ -1,0 +1,126 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+version = mod_version
+group = mod_group_id
+base.archivesName = "tekkit-cells-${minecraft_version}"
+
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+// GameTests live in their own source set and mod (tekkitcellstests), so the released jar carries no test content.
+sourceSets {
+    gametest
+}
+
+// AE2 and GuideME: the jars in libs/ when present (scripts/fetch-libs.sh, e.g. a local AE2 build), else the same
+// release versions from Modrinth's maven.
+def ae2 = file(ae2_jar).exists() ? files(ae2_jar) : ae2_maven
+def guideme = file(guideme_jar).exists() ? files(guideme_jar) : guideme_maven
+configurations {
+    ae2Jar { transitive = false }
+}
+
+// Mods for the dev runs only (MDK pattern): on the runtime classpath, not published as dependencies.
+configurations {
+    localRuntime
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    ae2Jar ae2
+    compileOnly ae2
+    localRuntime ae2
+    localRuntime guideme
+
+    gametestImplementation sourceSets.main.output
+    gametestCompileOnly ae2
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+
+neoForge {
+    enable {
+        version = neo_version
+    }
+
+    mods {
+        tekkitcells {
+            sourceSet(sourceSets.main)
+        }
+        tekkitcellstests {
+            sourceSet(sourceSets.gametest)
+        }
+    }
+
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            sourceSet = sourceSets.gametest
+            loadedMods = [mods.tekkitcells, mods.tekkitcellstests]
+        }
+    }
+
+}
+
+// The gametest source set sees Minecraft/NeoForge like main does.
+neoForge.addModdingDependenciesTo(sourceSets.gametest)
+configurations.gametestRuntimeClasspath.extendsFrom configurations.localRuntime
+
+// The cost-table test reads the recipe JSONs: ours from src/main/resources, AE2's from its jar.
+test {
+    useJUnitPlatform()
+    def ae2Files = configurations.ae2Jar
+    inputs.files(ae2Files)
+    doFirst { systemProperty 'tekkitcells.ae2Jar', ae2Files.singleFile.absolutePath }
+    systemProperty 'tekkitcells.resources', file('src/main/resources').absolutePath
+    systemProperty 'tekkitcells.readme', file('README.md').absolutePath
+    systemProperty 'tekkitcells.tableOut', layout.buildDirectory.file('cost-table.md').get().asFile.absolutePath
+    inputs.file('README.md')
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+        showStandardStreams = true
+    }
+}
+
+// neoforge.mods.toml is generated from src/main/templates with the properties above.
+def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    def props = [
+            minecraft_version_range: minecraft_version_range,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            ae2_version_range      : ae2_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+    ]
+    inputs.properties props
+    expand props
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

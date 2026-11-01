@@ -1,0 +1,29 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="Modern Tekkit"
+description='''Bigger Applied Energistics 2 item storage cells: 1M, 4M, 16M and 32M, with their storage components. Same rules as AE2's own cells (63 types, bytes per type scale with size).'''
+
+[[dependencies.${mod_id}]]
+modId="neoforge"
+type="required"
+versionRange="${neo_version_range}"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="minecraft"
+type="required"
+versionRange="${minecraft_version_range}"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="ae2"
+type="required"
+versionRange="${ae2_version_range}"
+ordering="AFTER"
+side="BOTH"

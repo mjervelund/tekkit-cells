@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "c": "tekkitcells:cell_component_16m",
+    "h": "ae2:item_cell_housing"
+  },
+  "pattern": [
+    "chc",
+    "hch",
+    "c c"
+  ],
+  "result": {
+    "id": "tekkitcells:cell_component_32m",
+    "count": 2
+  }
+}
