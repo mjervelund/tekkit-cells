@@ -1,0 +1,7 @@
+{
+  "type": "ae2:storage_cell_upgrade",
+  "input_cell": "ae2:fluid_storage_cell_256k",
+  "input_component": "tekkitcells:cell_component_1m",
+  "result_cell": "tekkitcells:fluid_storage_cell_1m",
+  "result_component": "ae2:cell_component_256k"
+}

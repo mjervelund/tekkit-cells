@@ -24,6 +24,8 @@ public final class TekkitCellsClient {
         for (var tier : CellTier.values()) {
             StorageCellModels.registerModel(TekkitCells.CELLS.get(tier).get(),
                     TekkitCells.id("block/drive_" + tier.id + "_item_cell"));
+            StorageCellModels.registerModel(TekkitCells.FLUID_CELLS.get(tier).get(),
+                    TekkitCells.id("block/drive_" + tier.id + "_fluid_cell"));
         }
     }
 }

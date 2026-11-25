@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Tekkit Cells' data and assets: recipes, item/drive models, lang, and the textures.
+"""Generate Tekkit Cells' data and assets (item and fluid cells): recipes, item/drive models, lang, and the textures.
 
     python3 scripts/gen-assets.py        # rewrites src/main/resources/{data,assets}/tekkitcells
 
@@ -25,6 +25,7 @@ TIERS = [
     ("32m", "32M", 32768, f"{NS}:item_storage_cell_16m", f"{NS}:cell_component_16m", ((196, 160, 255), (155, 89, 255), (98, 46, 188))),
 ]
 HOUSING = "ae2:item_cell_housing"
+FLUID_HOUSING = "ae2:fluid_cell_housing"
 
 
 def write_json(path: Path, obj) -> None:
@@ -87,6 +88,35 @@ def recipes() -> None:
             "result_cell": cell,
             "result_component": prev_comp,
         })
+        # Fluid cells share the components, as AE2's do: ME Fluid Cell Housing + component, or AE2's shaped fluid cell
+        # recipe (copper bottom row) around the component; disassembly and in-place upgrade from the previous fluid cell.
+        fcell = f"{NS}:fluid_storage_cell_{tid}"
+        prev_fcell = prev_cell.replace("item_storage_cell_", "fluid_storage_cell_")
+        write_json(rdir / f"fluid_storage_cell_{tid}_storage.json", {
+            "type": "minecraft:crafting_shapeless",
+            "category": "misc",
+            "ingredients": [FLUID_HOUSING, comp],
+            "result": {"id": fcell},
+        })
+        write_json(rdir / f"fluid_storage_cell_{tid}.json", {
+            "type": "minecraft:crafting_shaped",
+            "category": "misc",
+            "key": {"a": "ae2:quartz_glass", "b": "#c:dusts/redstone", "c": comp, "d": "#c:ingots/copper"},
+            "pattern": ["aba", "bcb", "ddd"],
+            "result": {"id": fcell},
+        })
+        write_json(rdir / f"cell_upgrade/fluid_storage_cell_{tid}.json", {
+            "type": "ae2:storage_cell_disassembly",
+            "cell": fcell,
+            "cell_disassembly_items": [{"id": FLUID_HOUSING}, {"id": comp}],
+        })
+        write_json(rdir / f"upgrade/fluid_storage_cell_{prev_tid}_to_{tid}.json", {
+            "type": "ae2:storage_cell_upgrade",
+            "input_cell": prev_fcell,
+            "input_component": comp,
+            "result_cell": fcell,
+            "result_component": prev_comp,
+        })
 
 
 # ---------------------------------------------------------------- models + lang
@@ -119,6 +149,26 @@ def models_and_lang() -> None:
                 },
             }],
         })
+        fcell = f"fluid_storage_cell_{tid}"
+        write_json(a / f"items/{fcell}.json", {"model": {
+            "type": "minecraft:model", "model": f"{NS}:item/{fcell}",
+            "tints": [{"type": "minecraft:constant", "value": -1}, {"type": "ae2:storage_cell_state"}]}})
+        write_json(a / f"models/item/{fcell}.json", {
+            "parent": "minecraft:item/generated",
+            "textures": {"layer0": f"{NS}:item/{fcell}", "layer1": "ae2:item/storage_cell_led"}})
+        write_json(a / f"models/block/drive_{tid}_fluid_cell.json", {
+            "ambientocclusion": False,
+            "textures": {"particle": f"{NS}:block/drive_fluid_cells", "cell": f"{NS}:block/drive_fluid_cells"},
+            "elements": [{
+                "from": [0, 0, 0], "to": [6, 2, 2],
+                "faces": {
+                    "north": {"uv": [0, v, 6, v + 2], "texture": "#cell", "cullface": "north"},
+                    "up": {"uv": [6, 8, 0, 10], "texture": "#cell", "cullface": "north"},
+                    "down": {"uv": [6, 8, 0, 10], "texture": "#cell", "cullface": "north"},
+                },
+            }],
+        })
+        lang[f"item.{NS}.{fcell}"] = f"{label} ME Fluid Storage Cell"
         lang[f"item.{NS}.{cell}"] = f"{label} ME Item Storage Cell"
         lang[f"item.{NS}.{comp}"] = f"{label} ME Storage Component"
     write_json(a / "lang/en_us.json", lang)
@@ -175,6 +225,26 @@ def cell_texture(col):
     return px
 
 
+FLUID = (58, 120, 220)
+FLUID_HI = (110, 170, 245)
+COPPER = (196, 110, 70)
+COPPER_LO = (150, 80, 52)
+
+
+def fluid_cell_texture(col):
+    """The item cell's shape with a liquid window (blue, wavy surface) and a copper base band, after AE2's fluid
+    housing (quartz glass, redstone, copper)."""
+    light, mid, _dark = col
+    px = cell_texture(col)
+    for y in range(7, 9):  # window: tier colour above a blue liquid with a wave on top
+        for x in range(6, 10):
+            px[y][x] = rgba(light if y == 7 and x % 2 == 0 else (FLUID_HI if y == 7 else FLUID))
+    px[7][6] = px[7][9] = rgba(mid)
+    for x in range(4, 12):  # copper base band
+        px[13][x] = rgba(COPPER_LO if x in (4, 11) else COPPER)
+    return px
+
+
 def component_texture(col):
     light, mid, dark = col
     px = [[None] * 16 for _ in range(16)]
@@ -197,7 +267,7 @@ def component_texture(col):
     return px
 
 
-def drive_texture():
+def drive_texture(fluid=False):
     px = [[(255, 255, 255, 255)] * 16 for _ in range(16)]
     for i, (*_x, col) in enumerate(TIERS):
         light, mid, dark = col
@@ -208,6 +278,9 @@ def drive_texture():
             for x, c in enumerate(row):
                 px[y][x] = rgba(c)
             px[y][1] = rgba(SOCKET if dy else BODY)
+            if fluid:  # a blue liquid stripe next to the tier colour, so fluid cells read apart in a drive
+                px[y][2] = rgba(FLUID_HI if dy == 0 else FLUID)
+                px[y][5] = rgba(COPPER if dy == 0 else COPPER_LO)
     for y in (8, 9):  # top/bottom faces of the slot box
         for x in range(6):
             px[y][x] = rgba(BODY if (x + y) % 2 else BODY_LO)
@@ -218,8 +291,10 @@ def textures() -> None:
     t = ROOT / f"assets/{NS}/textures"
     for tid, _l, _kb, _pc, _pp, col in TIERS:
         png(t / f"item/item_storage_cell_{tid}.png", cell_texture(col))
+        png(t / f"item/fluid_storage_cell_{tid}.png", fluid_cell_texture(col))
         png(t / f"item/cell_component_{tid}.png", component_texture(col))
     png(t / "block/drive_cells.png", drive_texture())
+    png(t / "block/drive_fluid_cells.png", drive_texture(fluid=True))
 
 
 def nbt_empty_structure(path: Path, size=(5, 3, 5)) -> None:

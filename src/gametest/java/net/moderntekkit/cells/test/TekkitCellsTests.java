@@ -44,6 +44,7 @@ public final class TekkitCellsTests {
 
     static {
         TESTS.put("cell_32m_in_drive", CellGameTests::cell32mInDrive);
+        TESTS.put("fluid_cell_32m_in_drive", CellGameTests::fluidCell32mInDrive);
         TESTS.put("all_tiers_capacity", CellGameTests::allTiersCapacity);
         TESTS.put("recipes_load", CellGameTests::recipesLoad);
     }

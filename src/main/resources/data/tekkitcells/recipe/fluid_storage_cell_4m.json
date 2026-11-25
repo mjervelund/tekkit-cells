@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "a": "ae2:quartz_glass",
+    "b": "#c:dusts/redstone",
+    "c": "tekkitcells:cell_component_4m",
+    "d": "#c:ingots/copper"
+  },
+  "pattern": [
+    "aba",
+    "bcb",
+    "ddd"
+  ],
+  "result": {
+    "id": "tekkitcells:fluid_storage_cell_4m"
+  }
+}

@@ -22,7 +22,7 @@ import appeng.items.materials.StorageComponentItem;
 import appeng.items.storage.BasicStorageCell;
 
 /**
- * Bigger AE2 item storage cells (1M, 4M, 16M, 32M) and their storage components. The cells are AE2's own
+ * Bigger AE2 item and fluid storage cells (1M, 4M, 16M, 32M) and their storage components. The cells are AE2's own
  * {@link BasicStorageCell}, so AE2's cell handler, drives, ME chests, tooltips, cell workbench and upgrade cards treat
  * them exactly like its 1k..256k cells.
  */
@@ -34,6 +34,7 @@ public final class TekkitCells {
 
     public static final Map<CellTier, DeferredItem<StorageComponentItem>> COMPONENTS = new EnumMap<>(CellTier.class);
     public static final Map<CellTier, DeferredItem<BasicStorageCell>> CELLS = new EnumMap<>(CellTier.class);
+    public static final Map<CellTier, DeferredItem<BasicStorageCell>> FLUID_CELLS = new EnumMap<>(CellTier.class);
 
     static {
         for (var tier : CellTier.values()) {
@@ -43,6 +44,10 @@ public final class TekkitCells {
                     p -> new BasicStorageCell(p.stacksTo(1).rarity(tier.ordinal() >= 2 ? Rarity.RARE : Rarity.UNCOMMON),
                             tier.idleDrain(), tier.kilobytes, tier.bytesPerType(), CellTier.TYPES,
                             AEKeyType.items())));
+            FLUID_CELLS.put(tier, ITEMS.registerItem(tier.fluidCellId(),
+                    p -> new BasicStorageCell(p.stacksTo(1).rarity(tier.ordinal() >= 2 ? Rarity.RARE : Rarity.UNCOMMON),
+                            tier.idleDrain(), tier.kilobytes, tier.bytesPerType(), CellTier.FLUID_TYPES,
+                            AEKeyType.fluids())));
         }
     }
 
@@ -57,12 +62,18 @@ public final class TekkitCells {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        // Same upgrade cards as AE2's item cells (appeng.init.internal.InitUpgrades).
+        // Same upgrade cards as AE2's item and fluid cells (appeng.init.internal.InitUpgrades).
         event.enqueueWork(() -> {
             var group = GuiText.StorageCells.getTranslationKey();
             for (var cell : CELLS.values()) {
                 for (var card : List.of(AEItems.FUZZY_CARD, AEItems.INVERTER_CARD, AEItems.EQUAL_DISTRIBUTION_CARD,
                         AEItems.VOID_CARD)) {
+                    Upgrades.add(card, cell.get(), 1, group);
+                }
+            }
+            // Fluid cells: AE2's fluid cell cards (no fuzzy card).
+            for (var cell : FLUID_CELLS.values()) {
+                for (var card : List.of(AEItems.INVERTER_CARD, AEItems.EQUAL_DISTRIBUTION_CARD, AEItems.VOID_CARD)) {
                     Upgrades.add(card, cell.get(), 1, group);
                 }
             }
@@ -76,6 +87,9 @@ public final class TekkitCells {
             }
             for (var tier : CellTier.values()) {
                 event.accept(CELLS.get(tier).get());
+            }
+            for (var tier : CellTier.values()) {
+                event.accept(FLUID_CELLS.get(tier).get());
             }
         }
     }

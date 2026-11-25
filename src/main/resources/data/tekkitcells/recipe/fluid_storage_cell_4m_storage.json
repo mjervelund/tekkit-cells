@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "ae2:fluid_cell_housing",
+    "tekkitcells:cell_component_4m"
+  ],
+  "result": {
+    "id": "tekkitcells:fluid_storage_cell_4m"
+  }
+}

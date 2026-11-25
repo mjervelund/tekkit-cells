@@ -29,7 +29,12 @@ import org.junit.jupiter.api.Test;
 /**
  * Computes the raw-material bill of every cell tier from the recipe JSONs (AE2's from its jar, ours from
  * src/main/resources) and checks the cost rule: each tier costs (capacity ratio x 1.25) times the raw materials of the
- * previous tier, per material and in total, within 5%. Also checks that README.md's cost table is the computed one.
+ * previous tier, per material and in total, within 5%. Also checks that README.md's cost tables are the computed ones.
+ * <p>
+ * Item and fluid cells are two chains. Fluid cells share the item cells' components (as AE2's do), so a fluid tier
+ * differs from 5x the previous one only by the housings inside its component: ME Item Cell Housings (2 iron + 1
+ * copper) instead of ME Fluid Cell Housings (3 copper). For fluid cells the rule is therefore checked with iron and
+ * copper ingots counted together; every other material and the total are exact.
  * <p>
  * "Raw" = the leaves below: base resources that are mined/smelted, not crafted in AE2. Presses are tools (not consumed
  * in "inscribe" mode) and are not counted.
@@ -65,12 +70,28 @@ class CostTableTest {
     record Tier(String label, String cell, double target) {
     }
 
-    static final List<Tier> TIERS = List.of(
+    /** A cost chain: its tiers, README marker name, and materials counted together for the rule check. */
+    record Chain(String marker, List<Tier> tiers, Map<String, String> merge) {
+    }
+
+    static final List<Tier> ITEM_TIERS = List.of(
             new Tier("256k (AE2)", "ae2:item_storage_cell_256k", 0),
             new Tier("1M", "tekkitcells:item_storage_cell_1m", 4 * 1.25),
             new Tier("4M", "tekkitcells:item_storage_cell_4m", 4 * 1.25),
             new Tier("16M", "tekkitcells:item_storage_cell_16m", 4 * 1.25),
             new Tier("32M", "tekkitcells:item_storage_cell_32m", 2 * 1.25));
+
+    static final List<Tier> FLUID_TIERS = List.of(
+            new Tier("256k (AE2)", "ae2:fluid_storage_cell_256k", 0),
+            new Tier("1M", "tekkitcells:fluid_storage_cell_1m", 4 * 1.25),
+            new Tier("4M", "tekkitcells:fluid_storage_cell_4m", 4 * 1.25),
+            new Tier("16M", "tekkitcells:fluid_storage_cell_16m", 4 * 1.25),
+            new Tier("32M", "tekkitcells:fluid_storage_cell_32m", 2 * 1.25));
+
+    static final String INGOTS = "iron + copper ingots";
+    static final Chain ITEM = new Chain("cost-table", ITEM_TIERS, Map.of());
+    static final Chain FLUID = new Chain("fluid-cost-table", FLUID_TIERS,
+            Map.of("minecraft:iron_ingot", INGOTS, "minecraft:copper_ingot", INGOTS));
 
     record Recipe(String id, String output, long count, Map<String, Long> inputs) {
     }
@@ -79,25 +100,41 @@ class CostTableTest {
     final Map<String, Map<String, Frac>> memo = new HashMap<>();
 
     @Test
-    void costRuleHolds() throws IOException {
+    void itemCostRuleHolds() throws IOException {
+        checkChain(ITEM);
+    }
+
+    @Test
+    void fluidCostRuleHolds() throws IOException {
+        checkChain(FLUID);
+    }
+
+    static Map<String, Frac> merged(Map<String, Frac> bill, Map<String, String> merge) {
+        var m = new TreeMap<String, Frac>();
+        bill.forEach((k, v) -> m.merge(merge.getOrDefault(k, k), v, Frac::add));
+        return m;
+    }
+
+    void checkChain(Chain chain) throws IOException {
         loadAe2(Path.of(System.getProperty("tekkitcells.ae2Jar")));
         loadDir(Path.of(System.getProperty("tekkitcells.resources"), "data"));
 
+        var tiers = chain.tiers;
         var bills = new ArrayList<Map<String, Frac>>();
-        for (var tier : TIERS) {
+        for (var tier : tiers) {
             bills.add(bill(tier.cell, new HashSet<>()));
         }
-        var table = table(bills);
+        var table = table(chain, bills);
         System.out.println(table);
-        var out = Path.of(System.getProperty("tekkitcells.tableOut"));
+        var out = Path.of(System.getProperty("tekkitcells.tableOut")).resolveSibling(chain.marker + ".md");
         Files.createDirectories(out.getParent());
         Files.writeString(out, table);
 
         var problems = new ArrayList<String>();
-        for (int i = 1; i < TIERS.size(); i++) {
-            var tier = TIERS.get(i);
-            var prev = bills.get(i - 1);
-            var cur = bills.get(i);
+        for (int i = 1; i < tiers.size(); i++) {
+            var tier = tiers.get(i);
+            var prev = merged(bills.get(i - 1), chain.merge);
+            var cur = merged(bills.get(i), chain.merge);
             if (!prev.keySet().equals(cur.keySet())) {
                 problems.add(tier.label + " uses other raw materials than the previous tier: " + cur.keySet() + " vs "
                         + prev.keySet());
@@ -120,13 +157,13 @@ class CostTableTest {
         assertTrue(problems.isEmpty(), String.join("\n", problems));
 
         var readme = Files.readString(Path.of(System.getProperty("tekkitcells.readme")));
-        var begin = "<!-- cost-table:begin -->\n";
-        var end = "<!-- cost-table:end -->";
+        var begin = "<!-- " + chain.marker + ":begin -->\n";
+        var end = "<!-- " + chain.marker + ":end -->";
         int b = readme.indexOf(begin);
         int e = readme.indexOf(end);
-        assertTrue(b >= 0 && e > b, "README.md has no cost-table markers");
+        assertTrue(b >= 0 && e > b, "README.md has no " + chain.marker + " markers");
         assertEquals(table, readme.substring(b + begin.length(), e),
-                "README.md cost table is out of date: copy build/cost-table.md between the markers");
+                "README.md " + chain.marker + " is out of date: copy build/" + chain.marker + ".md between the markers");
     }
 
     // ------------------------------------------------------------------ bill of materials
@@ -184,16 +221,18 @@ class CostTableTest {
 
     // ------------------------------------------------------------------ table
 
-    static String table(List<Map<String, Frac>> bills) {
+    static String table(Chain chain, List<Map<String, Frac>> bills) {
+        var tiers = chain.tiers;
         var mats = RAW.stream().filter(m -> bills.stream().anyMatch(b -> b.containsKey(m))).toList();
         var sb = new StringBuilder("| Tier |");
         mats.forEach(m -> sb.append(' ').append(RAW_LABEL.get(m)).append(" |"));
-        sb.append(" Total items | Ratio vs previous (each material / total) |\n|---|");
+        sb.append(chain.merge.isEmpty() ? " Total items | Ratio vs previous (each material / total) |\n|---|"
+                : " Total items | Ratio vs previous (each material, " + INGOTS + " together / total) |\n|---|");
         mats.forEach(m -> sb.append("---:|"));
         sb.append("---:|---|\n");
-        for (int i = 0; i < TIERS.size(); i++) {
+        for (int i = 0; i < tiers.size(); i++) {
             var b = bills.get(i);
-            sb.append("| ").append(TIERS.get(i).label).append(" |");
+            sb.append("| ").append(tiers.get(i).label).append(" |");
             for (var m : mats) {
                 sb.append(' ').append(fmt(b.getOrDefault(m, Frac.ZERO))).append(" |");
             }
@@ -201,16 +240,20 @@ class CostTableTest {
             if (i == 0) {
                 sb.append("base");
             } else {
-                var prev = bills.get(i - 1);
+                var prev = merged(bills.get(i - 1), chain.merge);
+                var cur = merged(b, chain.merge);
                 double lo = Double.MAX_VALUE, hi = 0;
-                for (var m : mats) {
-                    double r = b.get(m).div(prev.get(m)).toDouble();
+                for (var m : cur.keySet()) {
+                    if (!prev.containsKey(m)) {
+                        continue; // reported by the rule check
+                    }
+                    double r = cur.get(m).div(prev.get(m)).toDouble();
                     lo = Math.min(lo, r);
                     hi = Math.max(hi, r);
                 }
                 double rt = total(b).div(total(prev)).toDouble();
                 sb.append(lo == hi ? String.format("x%.3f", lo) : String.format("x%.3f..x%.3f", lo, hi))
-                        .append(String.format(" / x%.3f (rule x%.2f)", rt, TIERS.get(i).target));
+                        .append(String.format(" / x%.3f (rule x%.2f)", rt, tiers.get(i).target));
             }
             sb.append(" |\n");
         }
